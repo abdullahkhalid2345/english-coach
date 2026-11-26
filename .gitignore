@@ -1,0 +1,17 @@
+# Secret keys - NEVER upload these
+.env
+backend/.env
+
+# Python leftovers
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Uploaded audio saved while testing
+backend/uploads/
+
+# Editor / OS clutter
+.DS_Store
+.vscode/
+.idea/
