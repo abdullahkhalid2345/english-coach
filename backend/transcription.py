@@ -39,6 +39,11 @@ MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024
 
 WHISPER_MODEL = "whisper-1"
 
+# Whisper normally "cleans up" speech by deleting filler words like "um".
+# We want to count them, so we show Whisper an example sentence that
+# includes fillers. That nudges it to write them down too.
+KEEP_FILLER_WORDS_HINT = "Umm, let me think like, hmm... Okay, uh, here's what I'm, like, you know, thinking."
+
 
 def detect_format(filename: str | None, content_type: str | None) -> str:
     """Work out the audio format (e.g. "m4a") or raise a clear error."""
@@ -81,6 +86,7 @@ async def transcribe_audio(audio_bytes: bytes, audio_format: str) -> dict:
             response_format="verbose_json",
             # Tell Whisper to expect English. This helps with accents.
             language="en",
+            prompt=KEEP_FILLER_WORDS_HINT,
         )
     except openai.AuthenticationError:
         raise HTTPException(

@@ -1,9 +1,10 @@
 """
 English Coach backend.
 
-Step 2: /analyze now turns the recording into real text with OpenAI Whisper.
-The grammar feedback and pronunciation scores are still FAKE (dummy) data;
-later steps will connect Claude and Azure.
+Step 3: /analyze turns the recording into text with OpenAI Whisper, then
+asks Claude for grammar corrections and speaking tips.
+The pronunciation scores are still FAKE (dummy) data; a later step will
+connect Azure.
 """
 
 import os
@@ -11,6 +12,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from feedback import DEFAULT_CLAUDE_MODEL, get_speaking_feedback
 from transcription import MAX_FILE_SIZE_BYTES, detect_format, transcribe_audio
 
 # Read the secret keys from the .env file into the program.
@@ -32,6 +34,7 @@ def health_check():
         "keys_loaded": {
             "openai": bool(OPENAI_API_KEY),
             "anthropic": bool(ANTHROPIC_API_KEY),
+            "claude_model": os.getenv("CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
             "azure_speech": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
         },
     }
@@ -55,22 +58,26 @@ async def analyze(audio: UploadFile = File(...)):
 
     # 3. Real speech-to-text with OpenAI Whisper.
     transcription = await transcribe_audio(content, audio_format)
+    if not transcription["transcript"]:
+        raise HTTPException(
+            status_code=400,
+            detail="We couldn't hear any speech in the recording. Try again a bit closer to the microphone.",
+        )
 
-    # 4. Everything below "transcript" and "duration_seconds" is still dummy
-    #    data. Later steps will replace it with real results from Claude and Azure.
+    # 4. Real grammar feedback from Claude.
+    feedback = await get_speaking_feedback(transcription["transcript"])
+
+    # 5. Pronunciation is still dummy data. A later step will use Azure.
     return {
         "file_name": audio.filename,
         "file_size_bytes": len(content),
         "transcript": transcription["transcript"],
         "duration_seconds": transcription["duration_seconds"],
-        "corrected_sentence": "I went to school yesterday.",
-        "better_alternatives": [
-            "Yesterday, I went to school.",
-            "I attended school yesterday.",
-        ],
-        "grammar_notes": [
-            "Use the past tense 'went' because 'yesterday' is in the past."
-        ],
+        "corrections": feedback["corrections"],
+        "better_version": feedback["better_version"],
+        "filler_words": feedback["filler_words"],
+        "grammar_score": feedback["grammar_score"],
+        "tips": feedback["tips"],
         "pronunciation": {
             "overall_score": 82,
             "accuracy": 85,
@@ -78,10 +85,5 @@ async def analyze(audio: UploadFile = File(...)):
             "completeness": 90,
         },
         # Tells the app which parts are still fake.
-        "dummy_fields": [
-            "corrected_sentence",
-            "better_alternatives",
-            "grammar_notes",
-            "pronunciation",
-        ],
+        "dummy_fields": ["pronunciation"],
     }
