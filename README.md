@@ -15,10 +15,10 @@ Then you try again and see if you improved.
 | `backend/` | The "brain" that runs on a computer/server (Python + FastAPI). |
 | `app/` | The phone app (Flutter). *Coming in a later step.* |
 
-## Current status: Step 1
+## Current status: Step 2
 
-The backend runs, but the `/analyze` endpoint returns **fake (dummy) results**.
-No AI services are called yet. This lets us build and test the phone app first.
+- ✅ **Speech-to-text is real.** `/analyze` sends your recording to OpenAI Whisper and returns what you said.
+- ⏳ **Grammar feedback and pronunciation scores are still fake (dummy) data.** They will become real in the next steps.
 
 ---
 
@@ -64,11 +64,19 @@ pip install -r requirements.txt
 
 ### 5. Add your secret keys
 
-1. Make a copy of `.env.example` and name the copy `.env` (in the `backend` folder).
-2. Open `.env` and paste your keys after the `=` signs.
+1. Get an OpenAI API key at https://platform.openai.com/api-keys (you'll need to add a little credit to your
+   OpenAI account; Whisper costs about $0.006 per minute of audio).
+2. Make a copy of `.env.example` and name the copy `.env` (in the `backend` folder).
+3. Open `.env` and replace the fake `OPENAI_API_KEY` value with your real key. It should look like:
 
-You can leave them empty for now — the dummy version works without them.
+   ```
+   OPENAI_API_KEY=sk-proj-abc123...
+   ```
+
+   No spaces and no quotes. You can leave the other keys as they are for now.
+
 The `.env` file is listed in `.gitignore`, so it will **never** be uploaded to GitHub.
+If you change `.env` while the server is running, stop it (`Ctrl+C`) and start it again.
 
 ### 6. Start the server
 
@@ -79,15 +87,61 @@ uvicorn main:app --reload
 You should see `Uvicorn running on http://127.0.0.1:8000`. Leave this window open.
 (`--reload` means the server restarts automatically when you edit the code.) Press `Ctrl+C` to stop it.
 
-### 7. Try it out
+### 7. Check the server found your key
 
-Open http://127.0.0.1:8000/docs in your web browser. This is a free test page FastAPI makes for you:
+Open http://127.0.0.1:8000/ in your browser. You should see `"openai": true`.
+If it says `false`, the `.env` file is in the wrong folder, is named wrongly (e.g. `.env.txt`), or the key is empty.
 
-1. Click **POST /analyze** → **Try it out**.
-2. Choose any audio file (e.g. an `.m4a` or `.wav` voice recording).
-3. Click **Execute**. You'll see the dummy feedback below.
+### 8. Test with a sample audio file
 
-Also try http://127.0.0.1:8000/ — it says `"status": "ok"` and shows which keys were found (true/false — never the keys themselves).
+**Get a recording.** Use your phone's voice recorder app and say a sentence in English,
+e.g. *"Yesterday I go to the market and buyed some apples."* Send the file to your computer
+(email, AirDrop, Google Drive…). Accepted formats: **m4a, mp3, wav, webm**, plus ogg, flac and mp4. Max 25 MB.
+
+**Option A – in the browser (easiest):**
+
+1. Open http://127.0.0.1:8000/docs.
+2. Click **POST /analyze** → **Try it out**.
+3. Next to `audio`, click **Choose File** and pick your recording.
+4. Click **Execute** and scroll down to **Response body**.
+
+**Option B – from a terminal** (open a *second* terminal; the server must keep running in the first):
+
+```bash
+curl -F "audio=@/path/to/your/recording.m4a" http://127.0.0.1:8000/analyze
+```
+
+**What you should get back** (only `transcript` and `duration_seconds` are real right now):
+
+```json
+{
+  "file_name": "recording.m4a",
+  "file_size_bytes": 48213,
+  "transcript": "Yesterday I go to the market and buyed some apples.",
+  "duration_seconds": 3.8,
+  "corrected_sentence": "I went to school yesterday.",
+  "better_alternatives": ["..."],
+  "grammar_notes": ["..."],
+  "pronunciation": {"overall_score": 82, "...": "..."},
+  "dummy_fields": ["corrected_sentence", "better_alternatives", "grammar_notes", "pronunciation"]
+}
+```
+
+`dummy_fields` lists the parts that are still fake, so the app knows not to trust them yet.
+
+### If something goes wrong
+
+Instead of crashing, the server replies with a `detail` message telling you what happened:
+
+| Message starts with… | What to do |
+|---|---|
+| `OPENAI_API_KEY is missing` | Add the key to `backend/.env` and restart the server. |
+| `OpenAI rejected the API key` | The key is wrong or was deleted. Make a new one and paste it in again. |
+| `Unsupported audio format` | Send an m4a, mp3, wav or webm file. |
+| `The audio file is empty` / `too big` | Record again; keep it under 25 MB. |
+| `OpenAI could not read this audio file` | The file is broken or isn't really audio. Try another recording. |
+| `too many requests or … no credit` | Wait a minute, or add credit to your OpenAI account. |
+| `Could not reach OpenAI` | Check your internet connection. |
 
 ---
 
@@ -96,4 +150,4 @@ Also try http://127.0.0.1:8000/ — it says `"status": "ok"` and shows which key
 | Method | Address | What it does |
 |---|---|---|
 | GET | `/` | Health check — is the server alive, which keys are loaded. |
-| POST | `/analyze` | Send an audio file (form field name: `audio`). Returns feedback (dummy for now). |
+| POST | `/analyze` | Send an audio file (form field name: `audio`). Returns the real transcript and length, plus dummy feedback. |

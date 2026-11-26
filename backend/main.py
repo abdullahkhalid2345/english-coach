@@ -1,15 +1,17 @@
 """
 English Coach backend.
 
-Step 1: a skeleton server. The /analyze endpoint accepts an audio file
-and returns FAKE (dummy) results so the app can be built and tested
-before we connect the real AI services.
+Step 2: /analyze now turns the recording into real text with OpenAI Whisper.
+The grammar feedback and pronunciation scores are still FAKE (dummy) data;
+later steps will connect Claude and Azure.
 """
 
 import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
+
+from transcription import MAX_FILE_SIZE_BYTES, detect_format, transcribe_audio
 
 # Read the secret keys from the .env file into the program.
 load_dotenv()
@@ -37,17 +39,30 @@ def health_check():
 
 @app.post("/analyze")
 async def analyze(audio: UploadFile = File(...)):
-    """Receive a recording and return feedback. For now the feedback is dummy data."""
+    """Receive a recording, transcribe it, and return feedback."""
+    # 1. Check the file is a format we accept (m4a, mp3, wav, webm, ...).
+    audio_format = detect_format(audio.filename, audio.content_type)
+
+    # 2. Read the file and check it isn't empty or too big.
     content = await audio.read()
     if not content:
         raise HTTPException(status_code=400, detail="The audio file is empty.")
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="The audio file is too big. The limit is 25 MB (about 25 minutes of speech).",
+        )
 
-    # Later steps will replace this dummy data with real results from
-    # Whisper, Claude and Azure.
+    # 3. Real speech-to-text with OpenAI Whisper.
+    transcription = await transcribe_audio(content, audio_format)
+
+    # 4. Everything below "transcript" and "duration_seconds" is still dummy
+    #    data. Later steps will replace it with real results from Claude and Azure.
     return {
         "file_name": audio.filename,
         "file_size_bytes": len(content),
-        "transcript": "I goes to school yesterday.",
+        "transcript": transcription["transcript"],
+        "duration_seconds": transcription["duration_seconds"],
         "corrected_sentence": "I went to school yesterday.",
         "better_alternatives": [
             "Yesterday, I went to school.",
@@ -62,5 +77,11 @@ async def analyze(audio: UploadFile = File(...)):
             "fluency": 78,
             "completeness": 90,
         },
-        "is_dummy_data": True,
+        # Tells the app which parts are still fake.
+        "dummy_fields": [
+            "corrected_sentence",
+            "better_alternatives",
+            "grammar_notes",
+            "pronunciation",
+        ],
     }
