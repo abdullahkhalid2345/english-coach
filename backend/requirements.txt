@@ -4,3 +4,4 @@ python-multipart==0.0.20
 python-dotenv==1.0.1
 openai==3.60.0
 anthropic==2.14.0
+azure-cognitiveservices-speech==1.53.1

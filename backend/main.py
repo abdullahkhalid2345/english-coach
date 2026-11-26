@@ -1,18 +1,22 @@
 """
 English Coach backend.
 
-Step 3: /analyze turns the recording into text with OpenAI Whisper, then
-asks Claude for grammar corrections and speaking tips.
-The pronunciation scores are still FAKE (dummy) data; a later step will
-connect Azure.
+Step 4: /analyze
+  1. turns the recording into text with OpenAI Whisper,
+  2. asks Claude for grammar corrections and speaking tips, and
+  3. asks Azure Speech to score the pronunciation.
+Steps 2 and 3 run at the same time to save waiting.
 """
 
+import asyncio
 import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from audio_convert import ffmpeg_is_installed
 from feedback import DEFAULT_CLAUDE_MODEL, get_speaking_feedback
+from pronunciation import assess_pronunciation
 from transcription import MAX_FILE_SIZE_BYTES, detect_format, transcribe_audio
 
 # Read the secret keys from the .env file into the program.
@@ -37,6 +41,7 @@ def health_check():
             "claude_model": os.getenv("CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
             "azure_speech": bool(AZURE_SPEECH_KEY and AZURE_SPEECH_REGION),
         },
+        "ffmpeg_found": ffmpeg_is_installed(),
     }
 
 
@@ -64,10 +69,15 @@ async def analyze(audio: UploadFile = File(...)):
             detail="We couldn't hear any speech in the recording. Try again a bit closer to the microphone.",
         )
 
-    # 4. Real grammar feedback from Claude.
-    feedback = await get_speaking_feedback(transcription["transcript"])
+    # 4. Grammar feedback (Claude) and pronunciation scoring (Azure), at the same time.
+    #    If Claude fails, the whole request fails with a clear error.
+    #    If Azure fails, we still return everything else, with "pronunciation": null
+    #    and the reason in "pronunciation_error".
+    feedback, (pronunciation, pronunciation_error) = await asyncio.gather(
+        get_speaking_feedback(transcription["transcript"]),
+        assess_pronunciation(content, audio_format, transcription["transcript"]),
+    )
 
-    # 5. Pronunciation is still dummy data. A later step will use Azure.
     return {
         "file_name": audio.filename,
         "file_size_bytes": len(content),
@@ -78,12 +88,6 @@ async def analyze(audio: UploadFile = File(...)):
         "filler_words": feedback["filler_words"],
         "grammar_score": feedback["grammar_score"],
         "tips": feedback["tips"],
-        "pronunciation": {
-            "overall_score": 82,
-            "accuracy": 85,
-            "fluency": 78,
-            "completeness": 90,
-        },
-        # Tells the app which parts are still fake.
-        "dummy_fields": ["pronunciation"],
+        "pronunciation": pronunciation,
+        "pronunciation_error": pronunciation_error,
     }
