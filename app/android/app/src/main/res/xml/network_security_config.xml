@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FOR LOCAL TESTING ONLY.
+
+  Android normally blocks plain "http://" addresses and only allows "https://".
+  Your backend on your laptop uses plain http (e.g. http://192.168.1.23:8000),
+  so we allow it here. Your laptop's address on the Wi-Fi can change, so this
+  allows plain http to any address.
+
+  Before publishing the app, put the backend on a real server with https and
+  change cleartextTrafficPermitted below to "false".
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

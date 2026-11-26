@@ -8,14 +8,18 @@ An AI English speaking coach. You record yourself speaking, and the app tells yo
 
 Then you try again and see if you improved.
 
+| Home | Recording | Feedback | If something goes wrong |
+|---|---|---|---|
+| <img src="docs/screenshots/home.png" width="200"> | <img src="docs/screenshots/recording.png" width="200"> | <img src="docs/screenshots/results.png" width="200"> | <img src="docs/screenshots/error.png" width="200"> |
+
 ## Folders
 
 | Folder | What it is |
 |---|---|
 | `backend/` | The "brain" that runs on a computer/server (Python + FastAPI). |
-| `app/` | The phone app (Flutter). *Coming in a later step.* |
+| `app/` | The phone app (Flutter). See [Run the phone app](#run-the-phone-app-on-an-android-phone). |
 
-## Current status: Step 4 (the backend is complete)
+## Current status: Step 5 (backend and phone app are complete)
 
 - ✅ **Speech-to-text.** `/analyze` sends your recording to OpenAI Whisper and returns what you said.
 - ✅ **Speaking feedback.** Claude corrects your grammar, rewrites your answer in natural English,
@@ -159,11 +163,16 @@ If you change `.env` while the server is running, stop it (`Ctrl+C`) and start i
 ### 6. Start the server
 
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0
 ```
 
-You should see `Uvicorn running on http://127.0.0.1:8000`. Leave this window open.
-(`--reload` means the server restarts automatically when you edit the code.) Press `Ctrl+C` to stop it.
+You should see `Uvicorn running on http://0.0.0.0:8000`. Leave this window open. Press `Ctrl+C` to stop it.
+
+- `--reload` means the server restarts automatically when you edit the code.
+- `--host 0.0.0.0` lets **other devices on your Wi-Fi** (like your phone) reach the server.
+  Without it, only your laptop can use it. On your laptop itself, the address is still http://127.0.0.1:8000.
+- **Windows:** the first time, Windows Firewall may ask whether to allow Python. Tick **Private networks**
+  and click **Allow**. If you missed it, see "My phone can't reach the backend" below.
 
 ### 7. Check the server found your keys
 
@@ -308,6 +317,143 @@ Pronunciation problems never stop the request. Instead you'll see one of these i
 | `Azure couldn't hear any clear speech` | Record again, closer to the microphone. |
 
 ---
+
+## Run the phone app on an Android phone
+
+The app is in the `app/` folder. It's written in Flutter, which builds Android and iPhone apps from one code base.
+
+### A. Install Flutter and Android Studio (one time, on Windows)
+
+1. Install **Git for Windows**: https://git-scm.com/download/win (Flutter needs it).
+2. Install **Android Studio**: https://developer.android.com/studio. Open it once and let it finish
+   the setup wizard (it downloads the Android SDK).
+3. In Android Studio: **More Actions** (or **Settings**) → **SDK Manager** → **SDK Tools** tab → tick
+   **Android SDK Command-line Tools** → **Apply**.
+4. Install **Flutter**: follow https://docs.flutter.dev/get-started/install/windows/mobile.
+   The easiest way: in Android Studio, **Plugins** → search **Flutter** → **Install**, then use
+   **New Flutter Project** → it offers to download the Flutter SDK for you.
+   Make sure the Flutter `bin` folder is on your PATH (the guide shows how).
+5. Open a **new** terminal and run:
+
+   ```bash
+   flutter doctor --android-licenses
+   ```
+
+   Type `y` to accept each license. Then run:
+
+   ```bash
+   flutter doctor
+   ```
+
+   You want green ticks next to **Flutter** and **Android toolchain**. (Ignore Chrome, Visual Studio and Xcode.)
+
+### B. Prepare your Android phone (one time)
+
+1. **Turn on Developer options:** Settings → About phone → tap **Build number** 7 times.
+   (On some phones it's under Settings → About phone → Software information.)
+2. **Turn on USB debugging:** Settings → System → Developer options → **USB debugging** → on.
+3. Connect the phone to the laptop with a USB cable. On the phone, tap **Allow** when it asks
+   "Allow USB debugging?".
+4. Check the laptop sees the phone:
+
+   ```bash
+   flutter devices
+   ```
+
+   Your phone should be in the list.
+
+### C. Find your laptop's IP address (Windows)
+
+Your phone needs your laptop's address on the Wi-Fi network.
+
+1. Open **Command Prompt** and type:
+
+   ```bash
+   ipconfig
+   ```
+
+2. Find the section called **Wireless LAN adapter Wi-Fi** (not "Ethernet" or "vEthernet").
+3. Look at the line **IPv4 Address**, e.g. `IPv4 Address. . . . : 192.168.1.23`.
+   That number is your laptop's IP address.
+
+This address can change when you reconnect to Wi-Fi or use a different network. If the app suddenly
+can't reach the backend, run `ipconfig` again.
+
+### D. Tell the app the address
+
+Open `app/lib/config.dart` and change this line to your IP address (keep `http://` and `:8000`):
+
+```dart
+const String backendUrl = 'http://192.168.1.23:8000';
+```
+
+### E. Check the phone can reach the backend
+
+1. Start the backend with `--host 0.0.0.0` (backend step 6).
+2. Make sure the phone is on the **same Wi-Fi** as the laptop (not mobile data).
+3. On the phone, open Chrome and go to `http://YOUR-IP:8000/` (e.g. `http://192.168.1.23:8000/`).
+   You should see `"status": "ok"`. If you do, the app will be able to connect too.
+
+### F. Run the app
+
+```bash
+cd app
+```
+
+```bash
+flutter pub get
+```
+
+```bash
+flutter run
+```
+
+The first build takes a few minutes. The app then opens on your phone and stays installed.
+While `flutter run` is running, press `r` in the terminal to reload after changing code, or `q` to quit.
+
+### Using the app
+
+1. **Home:** you get a random topic. Tap **Different topic** for another one, then **Start speaking**.
+2. **Recording:** tap the microphone and allow microphone access. Speak, then tap the red stop button.
+   The recording stops by itself after 2 minutes.
+3. **Feedback:** wait for "Your coach is listening..." (usually 10–30 seconds). Then scroll through your
+   scores, your coloured words, corrections, a better version, filler words and tips.
+   Tap **Try again** to record the same topic again and see if you improved.
+
+### My phone can't reach the backend
+
+The app shows "Can't reach your coach" with a **Retry** button. Check, in this order:
+
+1. The backend is running and was started with `--host 0.0.0.0`.
+2. Phone and laptop are on the same Wi-Fi. Some public, office or guest networks block devices
+   from talking to each other; a home network or your phone's hotspot usually works.
+3. `app/lib/config.dart` has the right IP address (run `ipconfig` again), then restart the app.
+4. **Windows Firewall** may be blocking it. Open the Windows menu → **"Allow an app through Windows Firewall"**
+   → **Change settings** → find **Python** → tick **Private** → **OK**. Also make sure your Wi-Fi is set
+   to **Private** (Settings → Network & Internet → Wi-Fi → your network → Network profile type → **Private**).
+5. Test from the phone's browser again (step E).
+
+### App files
+
+| File | What it does |
+|---|---|
+| `lib/config.dart` | **The backend address** and other settings (max recording length, timeout). |
+| `lib/topics.dart` | The 30 speaking topics. Add your own! |
+| `lib/main.dart` | Starts the app and sets the colours (change `seedColor` to restyle everything). |
+| `lib/screens/home_screen.dart` | Screen 1: greeting, topic, "Start speaking". |
+| `lib/screens/recording_screen.dart` | Screen 2: record button, timer, microphone permission. |
+| `lib/screens/results_screen.dart` | Screen 3: uploads the recording and shows the feedback or an error. |
+| `lib/services/coach_api.dart` | Sends the recording to the backend and turns errors into friendly messages. |
+| `lib/models/analysis_result.dart` | Turns the backend's JSON answer into Dart objects. |
+| `lib/widgets/` | Reusable pieces: score cards, coloured transcript, score colours. |
+| `test/widget_test.dart` | Automatic checks. Run them with `flutter test`. |
+
+Android and iPhone settings that were changed:
+
+- `android/app/src/main/AndroidManifest.xml`: microphone and internet permissions, app name "English Coach".
+- `android/app/src/main/res/xml/network_security_config.xml`: allows plain `http://` so the app can talk to
+  your laptop. **For local testing only**; use https before publishing the app.
+- `ios/Runner/Info.plist`: the microphone permission message, and permission to use plain http on the local network.
 
 ## Endpoints
 
